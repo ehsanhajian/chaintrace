@@ -1,0 +1,69 @@
+{
+  "geth": {
+    "comms": ["geth"],
+    "p2p_ports": [30303],
+    "loopback_ports": [8545, 8551]
+  },
+  "reth": {
+    "comms": ["reth"],
+    "p2p_ports": [30303],
+    "loopback_ports": [8545, 8551]
+  },
+  "nethermind": {
+    "comms": ["nethermind", "Nethermind"],
+    "p2p_ports": [30303],
+    "loopback_ports": [8545, 8551]
+  },
+  "erigon": {
+    "comms": ["erigon"],
+    "p2p_ports": [30303],
+    "loopback_ports": [8545, 8551]
+  },
+  "besu": {
+    "comms": ["besu"],
+    "p2p_ports": [30303],
+    "loopback_ports": [8545, 8551]
+  },
+  "lighthouse": {
+    "comms": ["lighthouse"],
+    "p2p_ports": [9000],
+    "loopback_ports": [5052]
+  },
+  "prysm": {
+    "comms": ["prysm", "beacon-chain"],
+    "p2p_ports": [13000, 12000],
+    "loopback_ports": [3500, 4000]
+  },
+  "teku": {
+    "comms": ["teku"],
+    "p2p_ports": [9000],
+    "loopback_ports": [5051]
+  },
+  "nimbus": {
+    "comms": ["nimbus", "nimbus_beacon_node", "nimbus_beacon_n"],
+    "p2p_ports": [9000],
+    "loopback_ports": [5052]
+  },
+  "lodestar": {
+    "comms": ["lodestar"],
+    "p2p_ports": [9000],
+    "loopback_ports": [9596]
+  },
+  "mev-boost": {
+    "comms": ["mev-boost"],
+    "p2p_ports": [],
+    "remote_ports": [443, 18550],
+    "loopback_ports": [18550]
+  },
+  "op-node": {
+    "comms": ["op-node"],
+    "p2p_ports": [9222],
+    "remote_ports": [443],
+    "loopback_ports": [9545]
+  },
+  "op-geth": {
+    "comms": ["op-geth"],
+    "p2p_ports": [30303],
+    "loopback_ports": [8545, 8551]
+  }
+}

@@ -1,0 +1,6 @@
+chaintrace probe
+exec 4242 geth /bin/bash
+connect 4242 geth 169.254.169.254 80
+open 4242 geth /etc/ld.so.preload
+chmod 4242 geth /usr/bin/geth 511
+open 4242 geth /var/lib/geth/jwtsecret

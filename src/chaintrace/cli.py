@@ -1,0 +1,159 @@
+"""Command line for chaintrace."""
+
+from __future__ import annotations
+
+import argparse
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+from chaintrace import __version__
+from chaintrace.baseline import BaselineError, baseline_key, capture, home_file, load, save
+from chaintrace.clients import ClientError, apply_client
+from chaintrace.models import Observation
+from chaintrace.probe import render_probe, unavailable
+from chaintrace.procfs import ProcError, find_pids, read_pid
+from chaintrace.render import render_check, render_json, render_report, render_status
+from chaintrace.rules import evaluate, exit_code
+from chaintrace.trace import TraceError, read_trace
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _parser()
+    args = parser.parse_args(argv)
+    if args.version:
+        print(f"chaintrace {__version__}")
+        return 0
+    if not args.command:
+        parser.print_help(sys.stderr)
+        return 3
+    try:
+        return args.func(args)
+    except (ProcError, TraceError, ClientError, BaselineError) as exc:
+        print(exc, file=sys.stderr)
+        return 3
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="chaintrace", description="See what a blockchain node is doing.")
+    parser.add_argument("--version", action="store_true")
+    commands = parser.add_subparsers(dest="command")
+
+    status = commands.add_parser("status", help="Show the process, files, and connections")
+    _process_flags(status)
+    status.set_defaults(func=cmd_status, trace=None, no_baseline=True)
+
+    check = commands.add_parser("check", help="Report behavior that does not belong on a node")
+    _process_flags(check)
+    check.add_argument("--trace", type=Path)
+    check.add_argument("--no-baseline", action="store_true")
+    check.set_defaults(func=cmd_check)
+
+    baseline = commands.add_parser("baseline", help="Remember this binary, its listeners, and unknown destinations")
+    _process_flags(baseline)
+    baseline.set_defaults(func=cmd_baseline, trace=None, no_baseline=True)
+
+    report = commands.add_parser("report", help="Write a markdown report")
+    _process_flags(report)
+    report.add_argument("--trace", type=Path)
+    report.add_argument("--no-baseline", action="store_true")
+    report.add_argument("--output", type=Path, default=Path("chaintrace-report.md"))
+    report.set_defaults(func=cmd_report)
+
+    watch = commands.add_parser("watch", help="Trace exec, connect, open, and chmod for one pid")
+    watch.add_argument("--pid", type=int, required=True)
+    watch.add_argument("--seconds", type=int, default=10)
+    watch.set_defaults(func=cmd_watch)
+    return parser
+
+
+def _process_flags(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--proc", type=Path, help="Process table. Defaults to /proc")
+    parser.add_argument("--pid", type=int)
+    parser.add_argument("--name", help="Process name, such as geth or lighthouse")
+    parser.add_argument("--client", help="Client profile when the process name is generic")
+    parser.add_argument("--json", action="store_true")
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    obs = _load(args)
+    print(render_json(obs) if args.json else render_status(obs), end="")
+    return 0
+
+
+def cmd_check(args: argparse.Namespace) -> int:
+    obs = _load(args)
+    findings = evaluate(obs, _stored(args, obs))
+    print(render_json(obs, findings) if args.json else render_check(obs, findings), end="")
+    return exit_code(findings)
+
+
+def cmd_baseline(args: argparse.Namespace) -> int:
+    obs = _load(args)
+    saved = capture(obs)
+    path = home_file()
+    save(path, saved)
+    print(f"baseline {saved.client} {path}")
+    return 0
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    obs = _load(args)
+    findings = evaluate(obs, _stored(args, obs))
+    args.output.write_text(render_report(obs, findings))
+    print(f"report {args.output}")
+    return exit_code(findings)
+
+
+def cmd_watch(args: argparse.Namespace) -> int:
+    try:
+        script = render_probe(args.pid, args.seconds)
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return 3
+    reason = unavailable()
+    if reason:
+        print(reason, file=sys.stderr)
+        return 3
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "node.bt"
+        path.write_text(script)
+        try:
+            completed = subprocess.run(["bpftrace", str(path)], check=False, timeout=args.seconds + 20)
+        except subprocess.TimeoutExpired:
+            print("bpftrace did not exit", file=sys.stderr)
+            return 3
+    return 0 if completed.returncode == 0 else 3
+
+
+def _stored(args: argparse.Namespace, obs: Observation):
+    if args.no_baseline:
+        return None
+    return load(home_file(), baseline_key(obs))
+
+
+def _load(args: argparse.Namespace):
+    trace = getattr(args, "trace", None)
+    if trace and (args.pid or args.name):
+        raise TraceError("pass a trace or a process, not both")
+    if args.pid and args.name:
+        raise ProcError("pass --pid or --name, not both")
+    if trace:
+        return apply_client(read_trace(trace), args.client)
+    proc = args.proc if args.proc is not None else Path("/proc")
+    if not proc.is_dir():
+        raise ProcError(f"{proc} is not a process table")
+    if args.name:
+        found = find_pids(proc, args.name)
+        if not found:
+            raise ProcError(f"no process named {args.name}")
+        if len(found) > 1:
+            listed = ", ".join(str(item) for item in found)
+            raise ProcError(f"more than one {args.name}: {listed}")
+        pid = found[0]
+    elif args.pid is None:
+        raise ProcError("pass --pid or --name")
+    else:
+        pid = args.pid
+    return apply_client(read_pid(proc, pid), args.client)
