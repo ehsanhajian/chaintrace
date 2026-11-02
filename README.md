@@ -39,14 +39,24 @@ A saved process table and a saved trace are in `examples/`. Neither needs root.
 
 ```bash
 chaintrace status --proc examples/geth --pid 4242
+chaintrace status --proc examples/geth --pid 4242 --window 5
 chaintrace check --proc examples/geth --pid 4242
 chaintrace check --trace examples/compromise.trace
+```
+
+`--window 5` reads that process twice. On a saved table the rates stay at zero. On a live node the same command adds the CPU percent, the RSS change, and how many connections opened or closed:
+
+```text
+cpu_percent 12.0
+rss_delta +4096
+connections_opened 1
+connections_closed 0
 ```
 
 On the node:
 
 ```bash
-chaintrace status --name geth
+chaintrace status --name geth --window 5
 chaintrace check --name lighthouse
 chaintrace check --pid 4242 --client teku
 chaintrace baseline --name geth
@@ -100,8 +110,12 @@ Exit 0 means there is no warning or critical finding. An `info` line still exits
 
 `watch` writes a bpftrace program and runs it. The program is read-only: exec, connect, open, and chmod for that pid and for processes it starts, then it exits. A saved probe file is the same text `check --trace` reads. A JSON line per event works too.
 
+A shell the node starts keeps its own pid. `check --trace` reports that child's connect and open along with the node's events. A process that was already running is not in the file.
+
 ```text
 exec 4242 geth /bin/bash
+connect 5001 bash 203.0.113.9 443
+open 5001 bash /tmp/dropped
 connect 4242 geth 169.254.169.254 80
 open 4242 geth /etc/ld.so.preload
 chmod 4242 geth /usr/bin/geth 511
