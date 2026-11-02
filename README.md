@@ -25,12 +25,13 @@ chaintrace --version
 | Question | Command |
 | --- | --- |
 | What is this process doing? | `status --pid` or `status --name` |
+| What changed over a few seconds? | `status --window 5` |
 | Is any of that suspicious? | `check` |
 | What should the next check compare against? | `baseline` |
 | Can I keep the answer? | `report` |
 | What did the kernel see for a few seconds? | `watch --pid` |
 
-`status` and `check` read a process table. That is `/proc` on the node. `watch` needs `bpftrace` and root, and it only traces the one pid you name. The probe prints `exec`, `connect`, `open`, and `chmod`. It does not follow a child after the exec, and it prints IPv4 connections. IPv6 peers still show up in `status`.
+`status` and `check` read a process table. That is `/proc` on the node. `status --window 5` reads it twice, five seconds apart, and adds the CPU percent, the RSS change, and how many connections opened or closed. A process that exits during that wait is an error. One sample, without `--window`, still prints the totals. `watch` needs `bpftrace` and root, and it only traces the one pid you name. The probe prints `exec`, `connect`, `open`, and `chmod`. It does not follow a child after the exec, and it prints IPv4 connections. IPv6 peers still show up in `status`.
 
 ## Examples
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from chaintrace.models import Finding, Observation
+from chaintrace.window import Sample
 
 _KIND_ORDER = {
     "listen": 0,
@@ -17,7 +18,7 @@ _KIND_ORDER = {
 }
 
 
-def render_status(obs: Observation) -> str:
+def render_status(obs: Observation, sample: Sample | None = None) -> str:
     lines = [f"client {obs.client}", f"pid {obs.pid}", f"comm {obs.comm}"]
     if obs.exe:
         lines.append(f"exe {obs.exe}")
@@ -25,6 +26,11 @@ def render_status(obs: Observation) -> str:
         lines.append(f"state {obs.state}")
         lines.append(f"rss {obs.rss_bytes}")
         lines.append(f"cpu {obs.cpu_seconds:.1f}s")
+        if sample is not None:
+            lines.append(f"cpu_percent {sample.cpu_percent:.1f}")
+            lines.append(f"rss_delta {_signed(sample.rss_delta)}")
+            lines.append(f"connections_opened {sample.opened}")
+            lines.append(f"connections_closed {sample.closed}")
         lines.append(f"ppid {obs.ppid}")
         if obs.cmdline:
             lines.append("cmdline " + " ".join(obs.cmdline))
@@ -86,7 +92,13 @@ def render_report(obs: Observation, findings: list[Finding]) -> str:
     )
 
 
-def render_json(obs: Observation, findings: list[Finding] | None = None) -> str:
+def _signed(value: int) -> str:
+    if value > 0:
+        return f"+{value}"
+    return str(value)
+
+
+def render_json(obs: Observation, findings: list[Finding] | None = None, sample: Sample | None = None) -> str:
     body: dict[str, object] = {
         "client": obs.client,
         "pid": obs.pid,
@@ -110,6 +122,14 @@ def render_json(obs: Observation, findings: list[Finding] | None = None) -> str:
             for conn in obs.connections
         ],
     }
+    if sample is not None:
+        body["window"] = {
+            "seconds": sample.seconds,
+            "cpu_percent": sample.cpu_percent,
+            "rss_delta": sample.rss_delta,
+            "connections_opened": sample.opened,
+            "connections_closed": sample.closed,
+        }
     if findings is not None:
         body["findings"] = [
             {"severity": item.severity, "rule": item.rule, "message": item.message} for item in findings

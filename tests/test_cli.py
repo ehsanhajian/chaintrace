@@ -103,3 +103,32 @@ def test_client_override(tmp_path: Path) -> None:
     assert "remote " in plain.stdout
     assert "peer " in named.stdout
     assert named.stdout.startswith("client teku\n")
+
+
+def test_status_without_window_prints_totals_only() -> None:
+    result = _run("status", "--proc", "examples/geth", "--pid", "4242")
+    assert result.returncode == 0
+    assert "rss " in result.stdout
+    assert "cpu " in result.stdout
+    assert "cpu_percent" not in result.stdout
+    assert "connections_opened" not in result.stdout
+
+
+def test_status_window_reports_no_change_on_a_static_table() -> None:
+    result = _run("status", "--proc", "examples/geth", "--pid", "4242", "--window", "1", "--json")
+    assert result.returncode == 0, result.stderr
+    body = json.loads(result.stdout)
+    assert body["rss_bytes"] > 0
+    assert body["window"] == {
+        "seconds": 1,
+        "cpu_percent": 0.0,
+        "rss_delta": 0,
+        "connections_opened": 0,
+        "connections_closed": 0,
+    }
+
+
+def test_status_window_rejects_zero() -> None:
+    result = _run("status", "--proc", "examples/geth", "--pid", "4242", "--window", "0")
+    assert result.returncode == 3
+    assert "window" in result.stderr

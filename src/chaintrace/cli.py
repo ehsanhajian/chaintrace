@@ -17,6 +17,7 @@ from chaintrace.procfs import ProcError, find_pids, read_pid
 from chaintrace.render import render_check, render_json, render_report, render_status
 from chaintrace.rules import evaluate, exit_code
 from chaintrace.trace import TraceError, read_trace
+from chaintrace.window import read_window
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -42,6 +43,7 @@ def _parser() -> argparse.ArgumentParser:
 
     status = commands.add_parser("status", help="Show the process, files, and connections")
     _process_flags(status)
+    status.add_argument("--window", type=int, help="Seconds between two samples of this process")
     status.set_defaults(func=cmd_status, trace=None, no_baseline=True)
 
     check = commands.add_parser("check", help="Report behavior that does not belong on a node")
@@ -77,8 +79,13 @@ def _process_flags(parser: argparse.ArgumentParser) -> None:
 
 
 def cmd_status(args: argparse.Namespace) -> int:
-    obs = _load(args)
-    print(render_json(obs) if args.json else render_status(obs), end="")
+    if args.window is None:
+        obs = _load(args)
+        print(render_json(obs) if args.json else render_status(obs), end="")
+        return 0
+    proc, pid = _resolve(args)
+    obs, sample = read_window(proc, pid, args.window, args.client)
+    print(render_json(obs, sample=sample) if args.json else render_status(obs, sample), end="")
     return 0
 
 
@@ -141,6 +148,13 @@ def _load(args: argparse.Namespace):
         raise ProcError("pass --pid or --name, not both")
     if trace:
         return apply_client(read_trace(trace), args.client)
+    proc, pid = _resolve(args)
+    return apply_client(read_pid(proc, pid), args.client)
+
+
+def _resolve(args: argparse.Namespace) -> tuple[Path, int]:
+    if args.pid and args.name:
+        raise ProcError("pass --pid or --name, not both")
     proc = args.proc if args.proc is not None else Path("/proc")
     if not proc.is_dir():
         raise ProcError(f"{proc} is not a process table")
@@ -151,9 +165,7 @@ def _load(args: argparse.Namespace):
         if len(found) > 1:
             listed = ", ".join(str(item) for item in found)
             raise ProcError(f"more than one {args.name}: {listed}")
-        pid = found[0]
-    elif args.pid is None:
+        return proc, found[0]
+    if args.pid is None:
         raise ProcError("pass --pid or --name")
-    else:
-        pid = args.pid
-    return apply_client(read_pid(proc, pid), args.client)
+    return proc, args.pid
