@@ -3,6 +3,8 @@ from pathlib import Path
 
 from chaintrace.probe import render_probe
 from chaintrace.redact import redact_argv
+from chaintrace.render import render_check
+from chaintrace.rules import evaluate
 from chaintrace.trace import read_trace
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,12 +55,35 @@ def test_probe_text_and_jsonl(tmp_path: Path) -> None:
     assert traced.events[1].mode == "0644"
 
 
-def test_probe_script_is_limited_to_one_pid() -> None:
+def test_probe_follows_children_of_one_pid() -> None:
     script = render_probe(4242, 10)
-    assert "pid == 4242" in script
+    assert "@follow[4242] = 1;" in script
+    assert "tracepoint:sched:sched_process_fork" in script
+    assert "@follow[args->child_pid] = 1;" in script
+    assert script.count("/@follow[pid]/") == 5
+    assert "pid == 4242" not in script
     assert "interval:s:10" in script
+    assert "clear(@follow);" in script
     assert "__PID__" not in script
-    assert "sys_enter_execve" in script
-    assert "sys_enter_connect" in script
-    assert "sys_enter_openat" in script
-    assert "sys_enter_fchmodat" in script
+
+
+def test_check_reports_a_child_connect_and_open(tmp_path: Path) -> None:
+    path = tmp_path / "child.trace"
+    path.write_text(
+        "\n".join(
+            [
+                "chaintrace probe",
+                "exec 4242 geth /bin/bash",
+                "connect 5001 bash 203.0.113.9 443",
+                "open 5001 bash /tmp/dropped",
+                "",
+            ]
+        )
+    )
+    obs = read_trace(path)
+    text = render_check(obs, evaluate(obs))
+    assert any(event.pid == 5001 and event.kind == "connect" for event in obs.events)
+    assert any(event.pid == 5001 and event.kind == "open" for event in obs.events)
+    assert "203.0.113.9:443" in text
+    assert "/tmp/dropped" in text
+    assert "bash" in text

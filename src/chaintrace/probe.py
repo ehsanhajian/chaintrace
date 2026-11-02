@@ -1,26 +1,34 @@
-"""A short read-only bpftrace program for one pid."""
+"""A short read-only bpftrace program for one pid and the processes it starts."""
 
 from __future__ import annotations
 
 import os
 import shutil
 
-_TEMPLATE = """// Read-only trace for one process. Prints exec, connect, open, and chmod.
+_TEMPLATE = """// Read-only trace for one process and the processes it starts.
+// A process that was already running is not followed.
 // IPv4 connections only. IPv6 peers show up in `chaintrace status`.
 
 BEGIN
 {
   printf("chaintrace probe\\n");
+  @follow[__PID__] = 1;
+}
+
+tracepoint:sched:sched_process_fork
+/@follow[pid]/
+{
+  @follow[args->child_pid] = 1;
 }
 
 tracepoint:syscalls:sys_enter_execve
-/pid == __PID__/
+/@follow[pid]/
 {
   printf("exec %d %s %s\\n", pid, comm, str(args->filename));
 }
 
 tracepoint:syscalls:sys_enter_connect
-/pid == __PID__/
+/@follow[pid]/
 {
   $sa = args->uservaddr;
   if ($sa->sa_family == 2) {
@@ -31,19 +39,20 @@ tracepoint:syscalls:sys_enter_connect
 }
 
 tracepoint:syscalls:sys_enter_openat
-/pid == __PID__/
+/@follow[pid]/
 {
   printf("open %d %s %s\\n", pid, comm, str(args->filename));
 }
 
 tracepoint:syscalls:sys_enter_fchmodat
-/pid == __PID__/
+/@follow[pid]/
 {
   printf("chmod %d %s %s %d\\n", pid, comm, str(args->filename), args->mode);
 }
 
 interval:s:__SECONDS__
 {
+  clear(@follow);
   exit();
 }
 """
