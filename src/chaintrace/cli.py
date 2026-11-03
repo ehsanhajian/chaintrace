@@ -10,7 +10,7 @@ from pathlib import Path
 
 from chaintrace import __version__
 from chaintrace.baseline import BaselineError, baseline_key, capture, home_file, load, save
-from chaintrace.clients import ClientError, apply_client
+from chaintrace.clients import Client, ClientError, active_profile, apply_client, load_profile
 from chaintrace.models import Observation
 from chaintrace.probe import render_probe, unavailable
 from chaintrace.procfs import ProcError, find_pids, read_pid
@@ -75,29 +75,32 @@ def _process_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--pid", type=int)
     parser.add_argument("--name", help="Process name, such as geth or lighthouse")
     parser.add_argument("--client", help="Client profile when the process name is generic")
+    parser.add_argument("--profile", type=Path, help="Local JSON profile, used before the built-in catalog")
     parser.add_argument("--json", action="store_true")
 
 
 def cmd_status(args: argparse.Namespace) -> int:
+    profile = _local_profile(args)
     if args.window is None:
-        obs = _load(args)
+        obs = _load(args, profile)
         print(render_json(obs) if args.json else render_status(obs), end="")
         return 0
     proc, pid = _resolve(args)
-    obs, sample = read_window(proc, pid, args.window, args.client)
+    obs, sample = read_window(proc, pid, args.window, args.client, profile)
     print(render_json(obs, sample=sample) if args.json else render_status(obs, sample), end="")
     return 0
 
 
 def cmd_check(args: argparse.Namespace) -> int:
-    obs = _load(args)
-    findings = evaluate(obs, _stored(args, obs))
+    profile = _local_profile(args)
+    obs = _load(args, profile)
+    findings = evaluate(obs, _stored(args, obs), active_profile(profile, obs))
     print(render_json(obs, findings) if args.json else render_check(obs, findings), end="")
     return exit_code(findings)
 
 
 def cmd_baseline(args: argparse.Namespace) -> int:
-    obs = _load(args)
+    obs = _load(args, _local_profile(args))
     saved = capture(obs)
     path = home_file()
     save(path, saved)
@@ -106,8 +109,9 @@ def cmd_baseline(args: argparse.Namespace) -> int:
 
 
 def cmd_report(args: argparse.Namespace) -> int:
-    obs = _load(args)
-    findings = evaluate(obs, _stored(args, obs))
+    profile = _local_profile(args)
+    obs = _load(args, profile)
+    findings = evaluate(obs, _stored(args, obs), active_profile(profile, obs))
     args.output.write_text(render_report(obs, findings))
     print(f"report {args.output}")
     return exit_code(findings)
@@ -140,16 +144,25 @@ def _stored(args: argparse.Namespace, obs: Observation):
     return load(home_file(), baseline_key(obs))
 
 
-def _load(args: argparse.Namespace):
+def _local_profile(args: argparse.Namespace) -> Client | None:
+    path = getattr(args, "profile", None)
+    if path and args.client:
+        raise ClientError("pass --client or --profile, not both")
+    if path is None:
+        return None
+    return load_profile(path)
+
+
+def _load(args: argparse.Namespace, profile: Client | None):
     trace = getattr(args, "trace", None)
     if trace and (args.pid or args.name):
         raise TraceError("pass a trace or a process, not both")
     if args.pid and args.name:
         raise ProcError("pass --pid or --name, not both")
     if trace:
-        return apply_client(read_trace(trace), args.client)
+        return apply_client(read_trace(trace), args.client, profile)
     proc, pid = _resolve(args)
-    return apply_client(read_pid(proc, pid), args.client)
+    return apply_client(read_pid(proc, pid), args.client, profile)
 
 
 def _resolve(args: argparse.Namespace) -> tuple[Path, int]:

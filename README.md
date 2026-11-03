@@ -65,7 +65,22 @@ chaintrace watch --pid 4242 --seconds 10 > /tmp/node.trace
 chaintrace check --trace /tmp/node.trace
 ```
 
-`--client` selects a profile when the process name is generic, such as `java` for Teku. `--json` prints one document. `report` writes `chaintrace-report.md`.
+`--client` selects a profile when the process name is generic, such as `java` for Teku. `--profile FILE` reads a JSON file on this machine. When the process comm matches `comm` in that file, `check` uses those peer ports, loopback ports, and allowed addresses before the built-in catalog. A destination that is not a peer and not on that list is `unknown`. An allowed address is `expected`.
+
+```json
+{
+  "comm": "geth",
+  "p2p_ports": [30303],
+  "loopback_ports": [8545, 8551],
+  "allowed_hosts": ["203.0.113.10"]
+}
+```
+
+```bash
+chaintrace check --pid 4242 --profile /etc/chaintrace/geth.json
+```
+
+`--json` prints one document. `report` writes `chaintrace-report.md`.
 
 A password-style argument is printed as `[redacted]`. A path, including a JWT file path, stays visible. File contents are never read.
 
@@ -76,7 +91,7 @@ A password-style argument is printed as `[redacted]`. A path, including a JWT fi
 | `listen` | The process is waiting on this address. |
 | `local` | The other end is on this machine, such as the engine API. |
 | `peer` | The local or remote port is a peer port for this client. |
-| `expected` | The remote port is normal for this client, such as a builder relay on 443. |
+| `expected` | The remote port is normal for this client, such as a builder relay on 443, or the address is an allowed host in `--profile`. |
 | `remote` | The process has no profile, so the destination is shown and not judged. |
 | `unknown` | This profiled client connected somewhere that is not a peer, a loopback address, or an expected port. |
 | `metadata` | The destination is a cloud metadata address. |

@@ -128,6 +128,74 @@ def test_status_window_reports_no_change_on_a_static_table() -> None:
     }
 
 
+def test_profile_is_used_before_the_catalog(tmp_path: Path) -> None:
+    from tests.tree import add_process, socket_line
+
+    root = tmp_path / "proc"
+    root.mkdir()
+    add_process(
+        root,
+        8,
+        "mev-boost",
+        1,
+        "/usr/bin/mev-boost",
+        ["mev-boost"],
+        {4: "socket:[40]", 5: "socket:[41]", 6: "socket:[42]", 7: "socket:[43]"},
+    )
+    net = root / "net"
+    net.mkdir()
+    (net / "tcp").write_text(
+        socket_line("10.0.0.1", 41000, "203.0.113.8", 443, "01", 40)
+        + socket_line("10.0.0.1", 41001, "198.51.100.9", 443, "01", 41)
+        + socket_line("10.0.0.1", 30303, "198.51.100.10", 40000, "01", 42)
+        + socket_line("0.0.0.0", 8545, "0.0.0.0", 0, "0A", 43)
+    )
+    plain = _run("check", "--proc", str(root), "--pid", "8", "--no-baseline")
+    assert "expected 10.0.0.1:41000 203.0.113.8:443 tcp" in plain.stdout
+    assert "expected 10.0.0.1:41001 198.51.100.9:443 tcp" in plain.stdout
+    assert "exposed-port" not in plain.stdout
+
+    profile = tmp_path / "mev.json"
+    profile.write_text(
+        json.dumps(
+            {
+                "comm": "mev-boost",
+                "p2p_ports": [30303],
+                "loopback_ports": [8545],
+                "allowed_hosts": ["203.0.113.8", "[2001:db8::1]"],
+            }
+        )
+    )
+    checked = _run("check", "--proc", str(root), "--pid", "8", "--profile", str(profile), "--no-baseline")
+    assert checked.returncode == 1, checked.stdout + checked.stderr
+    assert "client mev-boost" in checked.stdout
+    assert "expected 10.0.0.1:41000 203.0.113.8:443 tcp" in checked.stdout
+    assert "unknown 10.0.0.1:41001 198.51.100.9:443 tcp" in checked.stdout
+    assert "peer 10.0.0.1:30303 198.51.100.10:40000 tcp" in checked.stdout
+    assert "warning exposed-port 0.0.0.0:8545" in checked.stdout
+    assert "unknown-destination 198.51.100.9:443" in checked.stdout
+    assert "unknown-destination 203.0.113.8:443" not in checked.stdout
+    assert "unknown-destination 198.51.100.10:40000" not in checked.stdout
+
+    catalog = _run("check", "--proc", "examples/geth", "--pid", "4242", "--profile", str(profile), "--no-baseline")
+    assert catalog.returncode == 0, catalog.stdout + catalog.stderr
+    assert "client geth" in catalog.stdout
+
+    both = _run("check", "--proc", str(root), "--pid", "8", "--client", "teku", "--profile", str(profile), "--no-baseline")
+    assert both.returncode == 3
+    assert "profile" in both.stderr
+
+    missing = _run("check", "--proc", str(root), "--pid", "8", "--profile", str(tmp_path / "missing.json"), "--no-baseline")
+    assert missing.returncode == 3
+    assert "not a file" in missing.stderr
+
+    named = tmp_path / "name.json"
+    named.write_text('{"p2p_ports": [1], "allowed_hosts": ["relay.example"]}')
+    bad = _run("check", "--proc", str(root), "--pid", "8", "--profile", str(named), "--no-baseline")
+    assert bad.returncode == 3
+    assert "comm" in bad.stderr
+
+
 def test_status_window_rejects_zero() -> None:
     result = _run("status", "--proc", "examples/geth", "--pid", "4242", "--window", "0")
     assert result.returncode == 3

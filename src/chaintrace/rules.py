@@ -41,8 +41,8 @@ _PERSISTENCE = (
 _RANK = {"critical": 0, "warning": 1, "info": 2}
 
 
-def evaluate(obs: Observation, baseline: Baseline | None = None) -> list[Finding]:
-    client = _profile(obs)
+def evaluate(obs: Observation, baseline: Baseline | None = None, client: Client | None = None) -> list[Finding]:
+    client = _profile(obs) if client is None else client
     found: list[Finding] = []
     if "(deleted)" in obs.exe:
         found.append(Finding("warning", "deleted-binary", obs.exe))

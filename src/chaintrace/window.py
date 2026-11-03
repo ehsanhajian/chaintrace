@@ -7,7 +7,7 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
-from chaintrace.clients import apply_client
+from chaintrace.clients import Client, apply_client
 from chaintrace.models import Connection, Observation
 from chaintrace.procfs import ProcError, read_pid
 
@@ -38,14 +38,15 @@ def read_window(
     pid: int,
     seconds: int,
     client: str | None,
+    profile: Client | None = None,
     pause=time.sleep,
 ) -> tuple[Observation, Sample]:
     if seconds < 1 or seconds > 300:
         raise ProcError("window must be from 1 to 300")
-    before = apply_client(read_pid(proc, pid), client)
+    before = apply_client(read_pid(proc, pid), client, profile)
     pause(seconds)
     try:
-        after = apply_client(read_pid(proc, pid), client)
+        after = apply_client(read_pid(proc, pid), client, profile)
     except ProcError as exc:
         raise ProcError(f"pid {pid} exited during the window") from exc
     return after, compare(before, after, seconds)

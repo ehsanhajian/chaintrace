@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import socket
 from dataclasses import dataclass
 
@@ -118,6 +119,17 @@ def is_metadata(ip: str) -> bool:
     return ip in METADATA_HOSTS
 
 
+def host_key(ip: str) -> str:
+    """Compress an address so an allowlist entry matches the process table."""
+    text = ip.strip()
+    if text.startswith("[") and text.endswith("]"):
+        text = text[1:-1]
+    try:
+        return ipaddress.ip_address(text).compressed
+    except ValueError as exc:
+        raise NetError(f"bad address {ip}") from exc
+
+
 def classify(raw: RawSocket, client: Client) -> str:
     listening = raw.state == "LISTEN" or raw.remote_port == 0
     if listening:
@@ -130,6 +142,8 @@ def classify(raw: RawSocket, client: Client) -> str:
         return "remote"
     if raw.remote_port in client.p2p_ports or raw.local_port in client.p2p_ports:
         return "peer"
+    if host_key(raw.remote_ip) in client.allowed_hosts:
+        return "expected"
     if raw.remote_port in client.remote_ports:
         return "expected"
     return "unknown"

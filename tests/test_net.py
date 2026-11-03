@@ -1,6 +1,6 @@
 import socket
 
-from chaintrace.clients import Client, client_named
+from chaintrace.clients import Client, ClientError, client_named, load_profile
 from chaintrace.net import RawSocket, classify, format_endpoint, parse_proc_net
 
 from tests.tree import ipv4_field, socket_line
@@ -52,3 +52,33 @@ def test_unprofiled_public_connection_is_remote() -> None:
     assert classify(raw, client_named("teku")) == "peer"
     relay = RawSocket("tcp", "10.0.0.1", 41000, "203.0.113.8", 443, "ESTABLISHED", "2")
     assert classify(relay, client_named("mev-boost")) == "expected"
+
+
+def test_allowed_host_is_expected_and_other_destinations_stay_unknown() -> None:
+    profile = Client(
+        "geth",
+        frozenset({"geth"}),
+        frozenset({30303}),
+        frozenset(),
+        frozenset({8545}),
+        frozenset({"203.0.113.8", "2001:db8::1"}),
+    )
+    allowed = RawSocket("tcp", "10.0.0.1", 41000, "203.0.113.8", 443, "ESTABLISHED", "1")
+    other = RawSocket("tcp", "10.0.0.1", 41001, "198.51.100.9", 443, "ESTABLISHED", "2")
+    peer = RawSocket("tcp", "10.0.0.1", 30303, "198.51.100.10", 40000, "ESTABLISHED", "3")
+    v6 = RawSocket("tcp", "2001:db8::2", 41002, "2001:db8:0:0:0:0:0:1", 443, "ESTABLISHED", "4")
+    assert classify(allowed, profile) == "expected"
+    assert classify(other, profile) == "unknown"
+    assert classify(peer, profile) == "peer"
+    assert classify(v6, profile) == "expected"
+
+
+def test_profile_file_rejects_a_name(tmp_path) -> None:
+    path = tmp_path / "node.json"
+    path.write_text('{"comm": "geth", "allowed_hosts": ["relay.example"]}')
+    try:
+        load_profile(path)
+    except ClientError as exc:
+        assert "not an address" in str(exc)
+    else:
+        raise AssertionError("a host name must be rejected")

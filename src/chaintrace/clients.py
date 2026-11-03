@@ -22,6 +22,7 @@ class Client:
     p2p_ports: frozenset[int]
     remote_ports: frozenset[int]
     loopback_ports: frozenset[int]
+    allowed_hosts: frozenset[str] = frozenset()
 
     @property
     def profiled(self) -> bool:
@@ -74,15 +75,54 @@ def recognize(comm: str, exe: str) -> Client:
     return Client("unknown", frozenset({comm} if comm else set()), frozenset(), frozenset(), frozenset())
 
 
-def resolve(comm: str, exe: str, override: str | None) -> Client:
+def load_profile(path: Path) -> Client:
+    """Read one client profile from a local JSON file."""
+    file = Path(path)
+    if not file.is_file():
+        raise ClientError(f"profile {file} is not a file")
+    try:
+        raw = json.loads(file.read_text())
+    except json.JSONDecodeError as exc:
+        raise ClientError(f"profile {file} is not json") from exc
+    if not isinstance(raw, dict):
+        raise ClientError(f"profile {file} must be an object")
+    comm = raw.get("comm")
+    if not isinstance(comm, str) or not comm or "/" in comm or " " in comm:
+        raise ClientError("profile comm must be a process name")
+    return Client(
+        name=comm,
+        comms=frozenset({comm}),
+        p2p_ports=_ports(raw.get("p2p_ports", []), "p2p_ports"),
+        remote_ports=frozenset(),
+        loopback_ports=_ports(raw.get("loopback_ports", []), "loopback_ports"),
+        allowed_hosts=_hosts(raw.get("allowed_hosts", [])),
+    )
+
+
+def matches(client: Client, comm: str, exe: str) -> bool:
+    base = _basename(exe)
+    if base and base in client.comms:
+        return True
+    return comm in client.comms
+
+
+def resolve(comm: str, exe: str, override: str | None, profile: Client | None = None) -> Client:
+    if profile is not None and matches(profile, comm, exe):
+        return profile
     if override:
         return client_named(override)
     return recognize(comm, exe)
 
 
-def apply_client(obs: Observation, override: str | None) -> Observation:
-    client = resolve(obs.comm, obs.exe, override)
-    if client.name == obs.client and override is None:
+def active_profile(profile: Client | None, obs: Observation) -> Client | None:
+    if profile is not None and matches(profile, obs.comm, obs.exe):
+        return profile
+    return None
+
+
+def apply_client(obs: Observation, override: str | None, profile: Client | None = None) -> Observation:
+    client = resolve(obs.comm, obs.exe, override, profile)
+    if client is not profile and override is None and client.name == obs.client:
         return obs
     from chaintrace.net import classify_connection
 
@@ -104,3 +144,30 @@ def apply_client(obs: Observation, override: str | None) -> Observation:
         children=obs.children,
         events=obs.events,
     )
+
+
+def _ports(value: object, label: str) -> frozenset[int]:
+    if not isinstance(value, list):
+        raise ClientError(f"profile {label} must be a list of ports")
+    ports: list[int] = []
+    for item in value:
+        if isinstance(item, bool) or not isinstance(item, int) or not 1 <= item <= 65535:
+            raise ClientError(f"profile {label} has a bad port")
+        ports.append(item)
+    return frozenset(ports)
+
+
+def _hosts(value: object) -> frozenset[str]:
+    from chaintrace.net import NetError, host_key
+
+    if not isinstance(value, list):
+        raise ClientError("profile allowed_hosts must be a list of addresses")
+    hosts: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            raise ClientError("profile allowed_hosts must be a list of addresses")
+        try:
+            hosts.append(host_key(item))
+        except NetError as exc:
+            raise ClientError(f"profile allowed host {item} is not an address") from exc
+    return frozenset(hosts)
