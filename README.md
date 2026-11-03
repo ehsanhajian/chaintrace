@@ -31,7 +31,7 @@ chaintrace --version
 | Can I keep the answer? | `report` |
 | What did the kernel see for a few seconds? | `watch --pid` |
 
-`status` and `check` read a process table. That is `/proc` on the node. `status --window 5` reads it twice, five seconds apart, and adds the CPU percent, the RSS change, and how many connections opened or closed. A process that exits during that wait is an error. One sample, without `--window`, still prints the totals. `watch` needs `bpftrace` and root. It traces the pid you name and any process that pid starts, including a shell, until `--seconds` elapses. A process that was already running stays out of the trace. The probe prints `exec`, `connect`, `open`, and `chmod`, and it prints IPv4 connections. IPv6 peers still show up in `status`.
+`status` and `check` read a process table. That is `/proc` on the node. `status --window 5` reads it twice, five seconds apart, and adds the CPU percent, the RSS change, and how many connections opened or closed. A process that exits during that wait is an error. One sample, without `--window`, still prints the totals. `watch` needs `bpftrace` and root. It traces the pid you name and any process that pid starts, including a shell, until `--seconds` elapses. A process that was already running stays out of the trace. The probe prints `exec`, `connect`, `open`, and `chmod`. A connect line carries an IPv4 or IPv6 address and a port, with no name lookup.
 
 ## Examples
 
@@ -117,6 +117,7 @@ exec 4242 geth /bin/bash
 connect 5001 bash 203.0.113.9 443
 open 5001 bash /tmp/dropped
 connect 4242 geth 169.254.169.254 80
+connect 4242 geth 2001:db8::1 30303
 open 4242 geth /etc/ld.so.preload
 chmod 4242 geth /usr/bin/geth 511
 ```

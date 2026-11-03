@@ -65,6 +65,10 @@ def test_probe_follows_children_of_one_pid() -> None:
     assert "interval:s:10" in script
     assert "clear(@follow);" in script
     assert "__PID__" not in script
+    assert "ntop($v4->sin_addr.s_addr)" in script
+    assert "sa_family == 10" in script
+    assert "ntop(10, $v6->sin6_addr.in6_u.u6_addr8)" in script
+    assert script.count('printf("connect %d %s %s %d\\n"') == 2
 
 
 def test_check_reports_a_child_connect_and_open(tmp_path: Path) -> None:
@@ -87,3 +91,15 @@ def test_check_reports_a_child_connect_and_open(tmp_path: Path) -> None:
     assert "203.0.113.9:443" in text
     assert "/tmp/dropped" in text
     assert "bash" in text
+
+
+def test_ipv6_connect_line_parses_like_ipv4(tmp_path: Path) -> None:
+    path = tmp_path / "v6.trace"
+    path.write_text("connect 4242 geth 2001:db8::1 30303\nconnect 4242 geth 18.1.2.3 51234\n")
+    obs = read_trace(path)
+    remotes = [event.remote for event in obs.events]
+    assert remotes == ["[2001:db8::1]:30303", "18.1.2.3:51234"]
+    kinds = {item.remote: item.kind for item in obs.connections}
+    assert kinds["[2001:db8::1]:30303"] == "peer"
+    assert kinds["18.1.2.3:51234"] == "unknown"
+    assert "[2001:db8::1]:30303" in render_check(obs, evaluate(obs))

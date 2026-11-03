@@ -7,7 +7,7 @@ import shutil
 
 _TEMPLATE = """// Read-only trace for one process and the processes it starts.
 // A process that was already running is not followed.
-// IPv4 connections only. IPv6 peers show up in `chaintrace status`.
+// A connect line is `connect PID COMM ADDRESS PORT`. No name lookup.
 
 BEGIN
 {
@@ -35,6 +35,10 @@ tracepoint:syscalls:sys_enter_connect
     $port = ($sa->sa_data[0] << 8) | $sa->sa_data[1];
     $v4 = (struct sockaddr_in *)args->uservaddr;
     printf("connect %d %s %s %d\\n", pid, comm, ntop($v4->sin_addr.s_addr), $port);
+  } else if ($sa->sa_family == 10) {
+    $port = ($sa->sa_data[0] << 8) | $sa->sa_data[1];
+    $v6 = (struct sockaddr_in6 *)args->uservaddr;
+    printf("connect %d %s %s %d\\n", pid, comm, ntop(10, $v6->sin6_addr.in6_u.u6_addr8), $port);
   }
 }
 
