@@ -1,0 +1,6 @@
+{
+  "comm": "geth",
+  "p2p_ports": [30303],
+  "loopback_ports": [8545, 8551],
+  "allowed_hosts": ["18.1.2.3", "203.0.113.10"]
+}

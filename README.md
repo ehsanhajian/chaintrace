@@ -41,6 +41,8 @@ A saved process table and a saved trace are in `examples/`. Neither needs root.
 chaintrace status --proc examples/geth --pid 4242
 chaintrace status --proc examples/geth --pid 4242 --window 5
 chaintrace check --proc examples/geth --pid 4242
+chaintrace check --proc examples/geth --pid 4242 --profile examples/geth.json
+chaintrace check --trace examples/allow.trace --profile examples/geth.json
 chaintrace check --trace examples/compromise.trace
 ```
 
@@ -67,17 +69,15 @@ chaintrace check --trace /tmp/node.trace
 
 `--client` selects a profile when the process name is generic, such as `java` for Teku. `--profile FILE` reads a JSON file on this machine. When the process comm matches `comm` in that file, `check` uses those peer ports, loopback ports, and allowed addresses before the built-in catalog. A destination that is not a peer and not on that list is `unknown`. An allowed address is `expected`.
 
+The sample is `examples/geth.json`. On the saved geth process, `18.1.2.3` stays `peer` because the local port is 30303. `examples/allow.trace` is the allowlist check: `203.0.113.10` is `expected`, and `198.51.100.9` is `unknown`.
+
 ```json
 {
   "comm": "geth",
   "p2p_ports": [30303],
   "loopback_ports": [8545, 8551],
-  "allowed_hosts": ["203.0.113.10"]
+  "allowed_hosts": ["18.1.2.3", "203.0.113.10"]
 }
-```
-
-```bash
-chaintrace check --pid 4242 --profile /etc/chaintrace/geth.json
 ```
 
 `--json` prints one document. `report` writes `chaintrace-report.md`.
@@ -100,7 +100,9 @@ Profiles cover the execution, consensus, and builder clients these tools already
 
 ## Findings
 
-Exit 0 means there is no warning or critical finding. An `info` line still exits 0. Exit 1 means a warning. Exit 2 means a critical finding. Exit 3 means the process or the trace could not be read.
+Exit 0 means there is no warning or critical finding. An `info` line still exits 0. Exit 1 means a warning. Exit 2 means a critical finding. Exit 3 means the process or the trace could not be read, or an alert POST failed.
+
+`check --alert-url` POSTs the same JSON as `check --json` after the findings are printed. `CHAINTRACE_ALERT_URL` does that for one run. With neither set, check sends nothing. A refused connection still prints the findings and exits 3. The document has paths and addresses, and no file contents.
 
 | Finding | Severity | When |
 | --- | --- | --- |

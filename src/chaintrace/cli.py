@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 
 from chaintrace import __version__
+from chaintrace.alert import AlertError, alert_url, post_json
 from chaintrace.baseline import BaselineError, baseline_key, capture, home_file, load, save
 from chaintrace.clients import Client, ClientError, active_profile, apply_client, load_profile
 from chaintrace.models import Observation
@@ -31,7 +32,7 @@ def main(argv: list[str] | None = None) -> int:
         return 3
     try:
         return args.func(args)
-    except (ProcError, TraceError, ClientError, BaselineError) as exc:
+    except (ProcError, TraceError, ClientError, BaselineError, AlertError) as exc:
         print(exc, file=sys.stderr)
         return 3
 
@@ -50,6 +51,7 @@ def _parser() -> argparse.ArgumentParser:
     _process_flags(check)
     check.add_argument("--trace", type=Path)
     check.add_argument("--no-baseline", action="store_true")
+    check.add_argument("--alert-url", help="POST the check JSON after printing it")
     check.set_defaults(func=cmd_check)
 
     baseline = commands.add_parser("baseline", help="Remember this binary, its listeners, and unknown destinations")
@@ -95,7 +97,11 @@ def cmd_check(args: argparse.Namespace) -> int:
     profile = _local_profile(args)
     obs = _load(args, profile)
     findings = evaluate(obs, _stored(args, obs), active_profile(profile, obs))
-    print(render_json(obs, findings) if args.json else render_check(obs, findings), end="")
+    document = render_json(obs, findings)
+    print(document if args.json else render_check(obs, findings), end="")
+    url = alert_url(args.alert_url)
+    if url:
+        post_json(url, document)
     return exit_code(findings)
 
 

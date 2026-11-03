@@ -10,10 +10,13 @@ from chaintrace import __version__
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _run(*args: str, home: Path | None = None) -> subprocess.CompletedProcess[str]:
+def _run(*args: str, home: Path | None = None, env_extra: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
+    env.pop("CHAINTRACE_ALERT_URL", None)
     env["PYTHONPATH"] = str(ROOT / "src")
     env["CHAINTRACE_HOME"] = str(home or Path("/tmp/chaintrace-empty"))
+    if env_extra:
+        env.update(env_extra)
     return subprocess.run(
         [sys.executable, "-m", "chaintrace", *args],
         check=False,
@@ -196,7 +199,115 @@ def test_profile_is_used_before_the_catalog(tmp_path: Path) -> None:
     assert "comm" in bad.stderr
 
 
+def test_example_profile_marks_an_allowed_address() -> None:
+    saved = _run("check", "--proc", "examples/geth", "--pid", "4242", "--profile", "examples/geth.json", "--no-baseline")
+    assert saved.returncode == 0, saved.stderr + saved.stdout
+    assert "client geth" in saved.stdout
+    assert "peer " in saved.stdout
+
+    traced = _run("check", "--trace", "examples/allow.trace", "--profile", "examples/geth.json", "--no-baseline")
+    assert traced.returncode == 0, traced.stderr + traced.stdout
+    assert "expected 203.0.113.10:443 tcp" in traced.stdout
+    assert "unknown 198.51.100.9:443 tcp" in traced.stdout
+    assert "unknown-destination 198.51.100.9:443" in traced.stdout
+    assert "unknown-destination 203.0.113.10:443" not in traced.stdout
+
+
 def test_status_window_rejects_zero() -> None:
     result = _run("status", "--proc", "examples/geth", "--pid", "4242", "--window", "0")
     assert result.returncode == 3
     assert "window" in result.stderr
+
+
+def test_alert_posts_check_json_and_a_refused_connection_exits_3() -> None:
+    import socket
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    received: list[bytes] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            length = int(self.headers.get("Content-Length", "0"))
+            received.append(self.rfile.read(length))
+            status = 500 if self.path == "/fail" else 204
+            self.send_response(status)
+            self.end_headers()
+
+        def log_message(self, fmt: str, *args: object) -> None:
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever)
+    thread.start()
+    port = server.server_address[1]
+    try:
+        posted = _run(
+            "check",
+            "--proc",
+            "examples/geth",
+            "--pid",
+            "4242",
+            "--json",
+            "--no-baseline",
+            "--alert-url",
+            f"http://127.0.0.1:{port}/alert",
+        )
+        via_env = _run(
+            "check",
+            "--trace",
+            "examples/allow.trace",
+            "--json",
+            "--no-baseline",
+            env_extra={"CHAINTRACE_ALERT_URL": f"http://127.0.0.1:{port}/alert"},
+        )
+        failed = _run(
+            "check",
+            "--proc",
+            "examples/geth",
+            "--pid",
+            "4242",
+            "--no-baseline",
+            "--alert-url",
+            f"http://127.0.0.1:{port}/fail",
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert posted.returncode == 0, posted.stderr + posted.stdout
+    assert "sensitive-file" in posted.stdout
+    assert received[0].decode() == posted.stdout
+    body = json.loads(received[0])
+    assert body["client"] == "geth"
+    assert body["findings"][0]["rule"] == "sensitive-file"
+    assert "contents" not in body
+    assert "hunter2" not in received[0].decode()
+
+    assert via_env.returncode == 0, via_env.stderr
+    assert json.loads(received[1])["findings"][0]["rule"] == "unknown-destination"
+
+    assert failed.returncode == 3
+    assert "client geth" in failed.stdout
+    assert "sensitive-file" in failed.stdout
+    assert "alert" in failed.stderr
+
+    held = socket.socket()
+    held.bind(("127.0.0.1", 0))
+    closed = held.getsockname()[1]
+    held.close()
+    refused = _run(
+        "check",
+        "--proc",
+        "examples/geth",
+        "--pid",
+        "4242",
+        "--no-baseline",
+        "--alert-url",
+        f"http://127.0.0.1:{closed}/alert",
+    )
+    assert refused.returncode == 3
+    assert "client geth" in refused.stdout
+    assert "sensitive-file" in refused.stdout
+    assert f"alert http://127.0.0.1:{closed}/alert failed" in refused.stderr
