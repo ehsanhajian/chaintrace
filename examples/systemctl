@@ -1,0 +1,16 @@
+#!/bin/sh
+# Read-only stand-in for the saved geth example. It does not start a service.
+if [ "$1" != "show" ]; then
+  echo "examples/systemctl only answers show" >&2
+  exit 2
+fi
+if [ "$2" = "geth.service" ]; then
+  echo "LoadState=loaded"
+  echo "MainPID=4242"
+  echo "ExecStart={ path=/usr/bin/geth ; argv[]=/usr/bin/geth --datadir /var/lib/geth ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }"
+  exit 0
+fi
+echo "LoadState=not-found"
+echo "MainPID=0"
+echo "ExecStart="
+exit 0

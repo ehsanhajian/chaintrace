@@ -18,6 +18,7 @@ from chaintrace.procfs import ProcError, find_pids, read_pid
 from chaintrace.render import render_check, render_json, render_report, render_status
 from chaintrace.rules import evaluate, exit_code
 from chaintrace.trace import TraceError, read_trace
+from chaintrace.unit import Unit, UnitError, read_unit
 from chaintrace.window import read_window
 
 
@@ -32,7 +33,7 @@ def main(argv: list[str] | None = None) -> int:
         return 3
     try:
         return args.func(args)
-    except (ProcError, TraceError, ClientError, BaselineError, AlertError) as exc:
+    except (ProcError, TraceError, ClientError, BaselineError, AlertError, UnitError) as exc:
         print(exc, file=sys.stderr)
         return 3
 
@@ -52,6 +53,7 @@ def _parser() -> argparse.ArgumentParser:
     check.add_argument("--trace", type=Path)
     check.add_argument("--no-baseline", action="store_true")
     check.add_argument("--alert-url", help="POST the check JSON after printing it")
+    check.add_argument("--unit", help="Compare the running executable with this systemd unit")
     check.set_defaults(func=cmd_check)
 
     baseline = commands.add_parser("baseline", help="Remember this binary, its listeners, and unknown destinations")
@@ -95,8 +97,9 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 def cmd_check(args: argparse.Namespace) -> int:
     profile = _local_profile(args)
-    obs = _load(args, profile)
-    findings = evaluate(obs, _stored(args, obs), active_profile(profile, obs))
+    unit = _read_unit(args)
+    obs = _load(args, profile, unit)
+    findings = evaluate(obs, _stored(args, obs), active_profile(profile, obs), unit.exe if unit else None)
     document = render_json(obs, findings)
     print(document if args.json else render_check(obs, findings), end="")
     url = alert_url(args.alert_url)
@@ -159,14 +162,28 @@ def _local_profile(args: argparse.Namespace) -> Client | None:
     return load_profile(path)
 
 
-def _load(args: argparse.Namespace, profile: Client | None):
+def _read_unit(args: argparse.Namespace) -> Unit | None:
+    name = getattr(args, "unit", None)
+    if not name:
+        return None
+    return read_unit(name)
+
+
+def _load(args: argparse.Namespace, profile: Client | None, unit: Unit | None = None):
     trace = getattr(args, "trace", None)
-    if trace and (args.pid or args.name):
+    if trace and (args.pid or args.name or unit is not None):
         raise TraceError("pass a trace or a process, not both")
     if args.pid and args.name:
         raise ProcError("pass --pid or --name, not both")
     if trace:
         return apply_client(read_trace(trace), args.client, profile)
+    if unit is not None and not args.pid and not args.name:
+        if unit.pid <= 0:
+            raise UnitError(f"unit {unit.name} is not running")
+        proc = args.proc if args.proc is not None else Path("/proc")
+        if not proc.is_dir():
+            raise ProcError(f"{proc} is not a process table")
+        return apply_client(read_pid(proc, unit.pid), args.client, profile)
     proc, pid = _resolve(args)
     return apply_client(read_pid(proc, pid), args.client, profile)
 

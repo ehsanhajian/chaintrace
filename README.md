@@ -43,6 +43,7 @@ chaintrace status --proc examples/geth --pid 4242 --window 5
 chaintrace check --proc examples/geth --pid 4242
 chaintrace check --proc examples/geth --pid 4242 --profile examples/geth.json
 chaintrace check --trace examples/allow.trace --profile examples/geth.json
+PATH="examples:$PATH" chaintrace check --proc examples/geth --unit geth.service
 chaintrace check --trace examples/compromise.trace
 ```
 
@@ -60,6 +61,7 @@ On the node:
 ```bash
 chaintrace status --name geth --window 5
 chaintrace check --name lighthouse
+chaintrace check --unit geth.service
 chaintrace check --pid 4242 --client teku
 chaintrace baseline --name geth
 chaintrace report --name geth
@@ -100,7 +102,9 @@ Profiles cover the execution, consensus, and builder clients these tools already
 
 ## Findings
 
-Exit 0 means there is no warning or critical finding. An `info` line still exits 0. Exit 1 means a warning. Exit 2 means a critical finding. Exit 3 means the process or the trace could not be read, or an alert POST failed.
+Exit 0 means there is no warning or critical finding. An `info` line still exits 0. Exit 1 means a warning. Exit 2 means a critical finding. Exit 3 means the process, the trace, or the systemd unit could not be read, or an alert POST failed.
+
+`check --unit geth.service` reads `ExecStart` with `systemctl show` and warns when the running executable is a different path. A missing unit exits 3. The command does not start, stop, or edit the unit. On this machine, `examples/systemctl` answers for the saved geth process when it is first on `PATH`.
 
 `check --alert-url` POSTs the same JSON as `check --json` after the findings are printed. `CHAINTRACE_ALERT_URL` does that for one run. With neither set, check sends nothing. A refused connection still prints the findings and exits 3. The document has paths and addresses, and no file contents.
 
@@ -111,6 +115,7 @@ Exit 0 means there is no warning or critical finding. An `info` line still exits
 | `new-destination` | warning | An unknown destination that was not in the baseline. |
 | `new-listener` | warning | A listen address that was not in the baseline. |
 | `binary-changed` | warning | The executable path changed since the baseline. |
+| `unit-binary` | warning | The running executable path is not the unit's `ExecStart`. |
 | `deleted-binary` | warning | The executable path is marked deleted. |
 | `exposed-port` | warning | The HTTP or engine port is listening outside loopback. |
 | `suspicious-port` | warning | An outbound connection to a shell or file-share port. |
@@ -143,4 +148,4 @@ Run `watch` only on a host you administer. It does not survive past `--seconds`,
 
 ## What it does not do
 
-ChainTrace does not call a node RPC, restart a client, or decide whether a release is safe. It does not read key material. A report can include paths and destination addresses, which is the observation.
+ChainTrace does not call a node RPC, restart a client, or decide whether a release is safe. It does not start, stop, or edit a systemd unit. It does not read key material. A report can include paths and destination addresses, which is the observation.

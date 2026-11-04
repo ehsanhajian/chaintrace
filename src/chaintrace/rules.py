@@ -41,11 +41,18 @@ _PERSISTENCE = (
 _RANK = {"critical": 0, "warning": 1, "info": 2}
 
 
-def evaluate(obs: Observation, baseline: Baseline | None = None, client: Client | None = None) -> list[Finding]:
+def evaluate(
+    obs: Observation,
+    baseline: Baseline | None = None,
+    client: Client | None = None,
+    unit_exe: str | None = None,
+) -> list[Finding]:
     client = _profile(obs) if client is None else client
     found: list[Finding] = []
     if "(deleted)" in obs.exe:
         found.append(Finding("warning", "deleted-binary", obs.exe))
+    if unit_exe and _running_exe(obs.exe) != unit_exe:
+        found.append(Finding("warning", "unit-binary", f"unit {unit_exe} running {obs.exe or 'unknown'}"))
     if baseline and obs.exe and baseline.exe and obs.exe != baseline.exe:
         found.append(Finding("warning", "binary-changed", f"was {baseline.exe} now {obs.exe}"))
     for child in obs.children:
@@ -100,6 +107,13 @@ def _profile(obs: Observation) -> Client:
         return client_named(obs.client)
     except ClientError:
         return Client("unknown", frozenset({obs.comm}), frozenset(), frozenset(), frozenset())
+
+
+def _running_exe(exe: str) -> str:
+    suffix = " (deleted)"
+    if exe.endswith(suffix):
+        return exe[: -len(suffix)]
+    return exe
 
 
 def _exec(path: str, client: Client, comm: str) -> Finding | None:

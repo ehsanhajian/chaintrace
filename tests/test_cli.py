@@ -213,6 +213,58 @@ def test_example_profile_marks_an_allowed_address() -> None:
     assert "unknown-destination 203.0.113.10:443" not in traced.stdout
 
 
+def test_unit_warns_when_the_running_binary_differs(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    script = bin_dir / "systemctl"
+    script.write_text(
+        "\n".join(
+            [
+                "#!/bin/sh",
+                'if [ "$1" != show ]; then echo "refusing $1" >&2; exit 2; fi',
+                'case "$2" in',
+                "  other.service)",
+                "    echo LoadState=loaded",
+                "    echo MainPID=4242",
+                "    echo 'ExecStart={ path=/tmp/other-geth ; argv[]=/tmp/other-geth ; }'",
+                "    ;;",
+                "  stopped.service)",
+                "    echo LoadState=loaded",
+                "    echo MainPID=0",
+                "    echo 'ExecStart={ path=/usr/bin/geth ; argv[]=/usr/bin/geth ; }'",
+                "    ;;",
+                "  *)",
+                "    echo LoadState=not-found",
+                "    echo MainPID=0",
+                "    echo ExecStart=",
+                "    ;;",
+                "esac",
+                "exit 0",
+                "",
+            ]
+        )
+    )
+    script.chmod(0o755)
+    env = {"PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}"}
+    differ = _run("check", "--proc", "examples/geth", "--unit", "other.service", "--no-baseline", env_extra=env)
+    assert differ.returncode == 1, differ.stderr + differ.stdout
+    assert "warning unit-binary unit /tmp/other-geth running /usr/bin/geth" in differ.stdout
+    missing = _run("check", "--proc", "examples/geth", "--unit", "missing.service", "--no-baseline", env_extra=env)
+    assert missing.returncode == 3
+    assert "unit missing.service was not found" in missing.stderr
+    stopped = _run("check", "--proc", "examples/geth", "--unit", "stopped.service", "--no-baseline", env_extra=env)
+    assert stopped.returncode == 3
+    assert "is not running" in stopped.stderr
+
+
+def test_example_unit_matches_the_saved_geth() -> None:
+    env = {"PATH": f"{ROOT / 'examples'}{os.pathsep}{os.environ.get('PATH', '')}"}
+    result = _run("check", "--proc", "examples/geth", "--unit", "geth.service", "--no-baseline", env_extra=env)
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "client geth" in result.stdout
+    assert "unit-binary" not in result.stdout
+
+
 def test_status_window_rejects_zero() -> None:
     result = _run("status", "--proc", "examples/geth", "--pid", "4242", "--window", "0")
     assert result.returncode == 3

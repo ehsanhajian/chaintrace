@@ -105,6 +105,17 @@ def test_node_holding_its_own_jwt_is_info() -> None:
     assert exit_code(evaluate(obs)) == 0
 
 
+def test_unit_binary_warns_only_when_the_path_differs() -> None:
+    same = evaluate(_obs(exe="/usr/bin/geth"), unit_exe="/usr/bin/geth")
+    assert same == []
+    moved = evaluate(_obs(exe="/usr/bin/geth"), unit_exe="/tmp/geth")
+    assert [(item.severity, item.rule, item.message) for item in moved] == [
+        ("warning", "unit-binary", "unit /tmp/geth running /usr/bin/geth")
+    ]
+    deleted = evaluate(_obs(exe="/usr/bin/geth (deleted)"), unit_exe="/usr/bin/geth")
+    assert [(item.rule) for item in deleted] == ["deleted-binary"]
+
+
 def test_java_process_can_be_named_teku() -> None:
     assert recognize("java", "/usr/bin/java").name == "unknown"
     assert recognize("nimbus_beacon_n", "").name == "nimbus"
