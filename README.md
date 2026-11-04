@@ -27,6 +27,7 @@ chaintrace --version
 | What is this process doing? | `status --pid` or `status --name` |
 | What changed over a few seconds? | `status --window 5` |
 | Is any of that suspicious? | `check` |
+| Who else has a key path open? | `keys --pid` |
 | What should the next check compare against? | `baseline` |
 | Can I keep the answer? | `report` |
 | What did the kernel see for a few seconds? | `watch --pid` |
@@ -41,6 +42,7 @@ A saved process table and a saved trace are in `examples/`. Neither needs root.
 chaintrace status --proc examples/geth --pid 4242
 chaintrace status --proc examples/geth --pid 4242 --window 5
 chaintrace check --proc examples/geth --pid 4242
+chaintrace keys --proc examples/geth --pid 4242
 chaintrace check --proc examples/geth --pid 4242 --profile examples/geth.json
 chaintrace check --trace examples/allow.trace --profile examples/geth.json
 PATH="examples:$PATH" chaintrace check --proc examples/geth --unit geth.service
@@ -106,11 +108,19 @@ Exit 0 means there is no warning or critical finding. An `info` line still exits
 
 `check --unit geth.service` reads `ExecStart` with `systemctl show` and warns when the running executable is a different path. A missing unit exits 3. The command does not start, stop, or edit the unit. On this machine, `examples/systemctl` answers for the saved geth process when it is first on `PATH`.
 
+`keys --pid` walks the process table and lists every open keystore, JWT, node key, or mnemonic path. The pid you named is listed with its own paths. Any other process that has one open is a `sensitive-file` warning. File contents stay unread. On the saved table, pid 77 is another process holding a keystore path:
+
+```text
+key 4242 geth /var/lib/geth/jwtsecret
+key 77 python /var/lib/geth/keystore/UTC--example
+warning sensitive-file pid 77 python /var/lib/geth/keystore/UTC--example
+```
+
 `check --alert-url` POSTs the same JSON as `check --json` after the findings are printed. `CHAINTRACE_ALERT_URL` does that for one run. With neither set, check sends nothing. A refused connection still prints the findings and exits 3. The document has paths and addresses, and no file contents.
 
 | Finding | Severity | When |
 | --- | --- | --- |
-| `sensitive-file` | info, or warning if another program has it open | A JWT, keystore, node key, or mnemonic path is open. |
+| `sensitive-file` | info, or warning if another program has it open | A JWT, keystore, node key, or mnemonic path is open. `keys` warns for every process except the pid you named. |
 | `unknown-destination` | info | An unknown destination, and no baseline has been saved. |
 | `new-destination` | warning | An unknown destination that was not in the baseline. |
 | `new-listener` | warning | A listen address that was not in the baseline. |

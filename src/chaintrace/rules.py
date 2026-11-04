@@ -6,7 +6,7 @@ from pathlib import Path
 
 from chaintrace.baseline import Baseline
 from chaintrace.clients import Client, ClientError, client_named
-from chaintrace.models import Finding, Observation
+from chaintrace.models import Finding, KeyOpen, Observation
 from chaintrace.net import is_loopback, split_endpoint, suspicious_port
 
 UNKNOWN_LIMIT = 5
@@ -90,6 +90,17 @@ def evaluate(
     unique = list(dict.fromkeys(found))
     unique.sort(key=lambda item: (_RANK[item.severity], item.rule, item.message))
     return unique
+
+
+def key_findings(node_pid: int, opens: tuple[KeyOpen, ...]) -> list[Finding]:
+    """Warn when a process other than the named node has a key path open."""
+    found = [
+        Finding("warning", "sensitive-file", f"pid {item.pid} {item.comm} {item.path}")
+        for item in opens
+        if item.pid != node_pid
+    ]
+    found.sort(key=lambda item: item.message)
+    return found
 
 
 def exit_code(findings: list[Finding]) -> int:

@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 from chaintrace.clients import recognize
-from chaintrace.models import Child, Connection, Observation, OpenFile
+from chaintrace.models import Child, Connection, KeyOpen, Observation, OpenFile
 from chaintrace.net import RawSocket, connection_from_raw, parse_proc_net
 from chaintrace.redact import redact_argv
 
@@ -75,6 +75,30 @@ def read_pid(proc_root: Path, pid: int) -> Observation:
         connections=ordered,
         children=tuple(children),
     )
+
+
+def key_opens(proc_root: Path) -> tuple[KeyOpen, ...]:
+    """Sensitive paths open anywhere in the process table. File contents are not read."""
+    root = Path(proc_root)
+    if not root.is_dir():
+        raise ProcError(f"{root} is not a process table")
+    found: list[KeyOpen] = []
+    seen: set[tuple[int, str]] = set()
+    for entry in root.iterdir():
+        if not entry.name.isdigit() or not entry.is_dir():
+            continue
+        try:
+            comm = _read_comm(entry)
+        except ProcError:
+            continue
+        pid = int(entry.name)
+        for item in _open_files(entry, comm):
+            if not item.sensitive or (pid, item.path) in seen:
+                continue
+            seen.add((pid, item.path))
+            found.append(KeyOpen(pid, comm, item.path))
+    found.sort(key=lambda item: (item.pid, item.path))
+    return tuple(found)
 
 
 def find_pids(proc_root: Path, name: str) -> list[int]:

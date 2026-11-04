@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from chaintrace.models import Finding, Observation
+from chaintrace.models import Finding, KeyOpen, Observation
 from chaintrace.window import Sample
 
 _KIND_ORDER = {
@@ -75,6 +75,28 @@ def render_findings(findings: list[Finding]) -> str:
 
 def render_check(obs: Observation, findings: list[Finding]) -> str:
     return render_status(obs) + "\n" + render_findings(findings)
+
+
+def render_keys(obs: Observation, opens: tuple[KeyOpen, ...], findings: list[Finding]) -> str:
+    lines = [f"pid {obs.pid}", f"comm {obs.comm}"]
+    if opens:
+        lines.extend(f"key {item.pid} {item.comm} {item.path}" for item in opens)
+    else:
+        lines.append("key none")
+    return "\n".join(lines) + "\n\n" + render_findings(findings)
+
+
+def render_keys_json(obs: Observation, opens: tuple[KeyOpen, ...], findings: list[Finding]) -> str:
+    body = {
+        "pid": obs.pid,
+        "comm": obs.comm,
+        "client": obs.client,
+        "keys": [{"pid": item.pid, "comm": item.comm, "path": item.path} for item in opens],
+        "findings": [
+            {"severity": item.severity, "rule": item.rule, "message": item.message} for item in findings
+        ],
+    }
+    return json.dumps(body, indent=2) + "\n"
 
 
 def render_report(obs: Observation, findings: list[Finding]) -> str:

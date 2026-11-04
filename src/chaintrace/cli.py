@@ -14,9 +14,9 @@ from chaintrace.baseline import BaselineError, baseline_key, capture, home_file,
 from chaintrace.clients import Client, ClientError, active_profile, apply_client, load_profile
 from chaintrace.models import Observation
 from chaintrace.probe import render_probe, unavailable
-from chaintrace.procfs import ProcError, find_pids, read_pid
-from chaintrace.render import render_check, render_json, render_report, render_status
-from chaintrace.rules import evaluate, exit_code
+from chaintrace.procfs import ProcError, find_pids, key_opens, read_pid
+from chaintrace.render import render_check, render_json, render_keys, render_keys_json, render_report, render_status
+from chaintrace.rules import evaluate, exit_code, key_findings
 from chaintrace.trace import TraceError, read_trace
 from chaintrace.unit import Unit, UnitError, read_unit
 from chaintrace.window import read_window
@@ -67,6 +67,13 @@ def _parser() -> argparse.ArgumentParser:
     report.add_argument("--output", type=Path, default=Path("chaintrace-report.md"))
     report.set_defaults(func=cmd_report)
 
+    keys = commands.add_parser("keys", help="List processes with a keystore, JWT, node key, or mnemonic open")
+    keys.add_argument("--proc", type=Path, help="Process table. Defaults to /proc")
+    keys.add_argument("--pid", type=int)
+    keys.add_argument("--name", help="Process name, such as geth or lighthouse")
+    keys.add_argument("--json", action="store_true")
+    keys.set_defaults(func=cmd_keys)
+
     watch = commands.add_parser("watch", help="Trace exec, connect, open, and chmod for one pid")
     watch.add_argument("--pid", type=int, required=True)
     watch.add_argument("--seconds", type=int, default=10)
@@ -105,6 +112,15 @@ def cmd_check(args: argparse.Namespace) -> int:
     url = alert_url(args.alert_url)
     if url:
         post_json(url, document)
+    return exit_code(findings)
+
+
+def cmd_keys(args: argparse.Namespace) -> int:
+    proc, pid = _resolve(args)
+    obs = read_pid(proc, pid)
+    opens = tuple(sorted(key_opens(proc), key=lambda item: (item.pid != pid, item.pid, item.path)))
+    findings = key_findings(pid, opens)
+    print(render_keys_json(obs, opens, findings) if args.json else render_keys(obs, opens, findings), end="")
     return exit_code(findings)
 
 

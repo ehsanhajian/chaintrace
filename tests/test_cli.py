@@ -265,6 +265,25 @@ def test_example_unit_matches_the_saved_geth() -> None:
     assert "unit-binary" not in result.stdout
 
 
+def test_example_keys_warns_for_the_other_process() -> None:
+    result = _run("keys", "--proc", "examples/geth", "--pid", "4242")
+    assert result.returncode == 1, result.stderr + result.stdout
+    assert "key 4242 geth /var/lib/geth/jwtsecret" in result.stdout
+    assert "key 77 python /var/lib/geth/keystore/UTC--example" in result.stdout
+    assert "warning sensitive-file pid 77 python /var/lib/geth/keystore/UTC--example" in result.stdout
+    assert "warning sensitive-file pid 4242" not in result.stdout
+    body = json.loads(_run("keys", "--proc", "examples/geth", "--pid", "4242", "--json").stdout)
+    assert body["pid"] == 4242
+    assert [item["path"] for item in body["keys"]] == [
+        "/var/lib/geth/jwtsecret",
+        "/var/lib/geth/keystore/UTC--example",
+    ]
+    assert "contents" not in body
+    missing = _run("keys", "--proc", "examples/geth", "--pid", "999")
+    assert missing.returncode == 3
+    assert "pid 999" in missing.stderr
+
+
 def test_status_window_rejects_zero() -> None:
     result = _run("status", "--proc", "examples/geth", "--pid", "4242", "--window", "0")
     assert result.returncode == 3

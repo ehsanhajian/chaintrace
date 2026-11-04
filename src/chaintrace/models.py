@@ -13,6 +13,13 @@ class OpenFile:
 
 
 @dataclass(frozen=True)
+class KeyOpen:
+    pid: int
+    comm: str
+    path: str
+
+
+@dataclass(frozen=True)
 class Connection:
     protocol: str
     local: str
