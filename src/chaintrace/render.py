@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from chaintrace.models import Finding, KeyOpen, Observation
+from chaintrace.rules import worst_severity
 from chaintrace.window import Sample
 
 _KIND_ORDER = {
@@ -75,6 +76,10 @@ def render_findings(findings: list[Finding]) -> str:
 
 def render_check(obs: Observation, findings: list[Finding]) -> str:
     return render_status(obs) + "\n" + render_findings(findings)
+
+
+def render_brief(obs: Observation, findings: list[Finding]) -> str:
+    return f"client {obs.client} pid {obs.pid} {worst_severity(findings)}\n"
 
 
 def render_keys(obs: Observation, opens: tuple[KeyOpen, ...], findings: list[Finding]) -> str:

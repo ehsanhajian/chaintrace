@@ -1,6 +1,6 @@
 from chaintrace.clients import recognize
-from chaintrace.models import Child, Connection, Event, Observation, OpenFile
-from chaintrace.rules import evaluate, exit_code
+from chaintrace.models import Child, Connection, Event, Finding, Observation, OpenFile
+from chaintrace.rules import evaluate, exit_code, worst_severity
 from chaintrace.baseline import Baseline
 
 
@@ -103,6 +103,15 @@ def test_node_holding_its_own_jwt_is_info() -> None:
     finding = evaluate(obs)[0]
     assert (finding.severity, finding.rule) == ("info", "sensitive-file")
     assert exit_code(evaluate(obs)) == 0
+
+
+def test_worst_severity_picks_the_highest_rank() -> None:
+    assert worst_severity([]) == "ok"
+    assert worst_severity([Finding("info", "sensitive-file", "jwt")]) == "info"
+    mixed = [Finding("info", "sensitive-file", "jwt"), Finding("warning", "unit-binary", "path")]
+    assert worst_severity(mixed) == "warning"
+    mixed.append(Finding("critical", "metadata-destination", "169.254.169.254:80"))
+    assert worst_severity(mixed) == "critical"
 
 
 def test_unit_binary_warns_only_when_the_path_differs() -> None:

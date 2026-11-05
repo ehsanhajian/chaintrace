@@ -15,7 +15,15 @@ from chaintrace.clients import Client, ClientError, active_profile, apply_client
 from chaintrace.models import Observation
 from chaintrace.probe import render_probe, unavailable
 from chaintrace.procfs import ProcError, find_pids, key_opens, read_pid
-from chaintrace.render import render_check, render_json, render_keys, render_keys_json, render_report, render_status
+from chaintrace.render import (
+    render_brief,
+    render_check,
+    render_json,
+    render_keys,
+    render_keys_json,
+    render_report,
+    render_status,
+)
 from chaintrace.rules import evaluate, exit_code, key_findings
 from chaintrace.trace import TraceError, read_trace
 from chaintrace.unit import Unit, UnitError, read_unit
@@ -54,6 +62,7 @@ def _parser() -> argparse.ArgumentParser:
     check.add_argument("--no-baseline", action="store_true")
     check.add_argument("--alert-url", help="POST the check JSON after printing it")
     check.add_argument("--unit", help="Compare the running executable with this systemd unit")
+    check.add_argument("--brief", action="store_true", help="Print one line: client, pid, and worst severity")
     check.set_defaults(func=cmd_check)
 
     baseline = commands.add_parser("baseline", help="Remember this binary, its listeners, and unknown destinations")
@@ -108,7 +117,10 @@ def cmd_check(args: argparse.Namespace) -> int:
     obs = _load(args, profile, unit)
     findings = evaluate(obs, _stored(args, obs), active_profile(profile, obs), unit.exe if unit else None)
     document = render_json(obs, findings)
-    print(document if args.json else render_check(obs, findings), end="")
+    if args.brief:
+        print(render_brief(obs, findings), end="")
+    else:
+        print(document if args.json else render_check(obs, findings), end="")
     url = alert_url(args.alert_url)
     if url:
         post_json(url, document)

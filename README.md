@@ -42,6 +42,7 @@ A saved process table and a saved trace are in `examples/`. Neither needs root.
 chaintrace status --proc examples/geth --pid 4242
 chaintrace status --proc examples/geth --pid 4242 --window 5
 chaintrace check --proc examples/geth --pid 4242
+chaintrace check --proc examples/geth --name geth --brief
 chaintrace keys --proc examples/geth --pid 4242
 chaintrace check --proc examples/geth --pid 4242 --profile examples/geth.json
 chaintrace check --trace examples/allow.trace --profile examples/geth.json
@@ -63,6 +64,7 @@ On the node:
 ```bash
 chaintrace status --name geth --window 5
 chaintrace check --name lighthouse
+chaintrace check --name geth --brief
 chaintrace check --unit geth.service
 chaintrace check --pid 4242 --client teku
 chaintrace baseline --name geth
@@ -105,6 +107,10 @@ Profiles cover the execution, consensus, and builder clients these tools already
 ## Findings
 
 Exit 0 means there is no warning or critical finding. An `info` line still exits 0. Exit 1 means a warning. Exit 2 means a critical finding. Exit 3 means the process, the trace, or the systemd unit could not be read, or an alert POST failed.
+
+`check --brief` prints one journal line: the client, the pid, and the worst severity (`ok`, `info`, `warning`, or `critical`). The multi-line report stays the default, and the exit code stays the same. On the saved geth process the line is `client geth pid 4242 info`.
+
+`examples/chaintrace-check.timer` runs `chaintrace check --name geth --brief` through `examples/chaintrace-check.service`. The units are examples. ChainTrace does not install them.
 
 `check --unit geth.service` reads `ExecStart` with `systemctl show` and warns when the running executable is a different path. A missing unit exits 3. The command does not start, stop, or edit the unit. On this machine, `examples/systemctl` answers for the saved geth process when it is first on `PATH`.
 

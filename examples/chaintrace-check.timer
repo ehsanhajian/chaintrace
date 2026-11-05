@@ -1,0 +1,11 @@
+# Example only. ChainTrace does not install this unit.
+# Copy it, with the service, to /etc/systemd/system/ and start the timer yourself.
+[Unit]
+Description=Run a ChainTrace check for geth
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target

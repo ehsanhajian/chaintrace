@@ -46,6 +46,25 @@ def test_example_node_is_ok() -> None:
     assert result.stdout.strip().endswith("ok")
 
 
+def test_brief_prints_one_journal_line(tmp_path: Path) -> None:
+    saved = _run("check", "--proc", "examples/geth", "--name", "geth", "--brief", "--no-baseline")
+    assert saved.returncode == 0, saved.stderr + saved.stdout
+    assert saved.stdout == "client geth pid 4242 info\n"
+    critical = _run("check", "--trace", "examples/compromise.trace", "--brief", "--no-baseline")
+    assert critical.returncode == 2
+    assert critical.stdout == "client geth pid 4242 critical\n"
+    trace = tmp_path / "peer.trace"
+    trace.write_text("connect 4242 geth 18.1.2.3 30303\n")
+    quiet = _run("check", "--trace", str(trace), "--brief", "--no-baseline")
+    assert quiet.returncode == 0
+    assert quiet.stdout == "client geth pid 4242 ok\n"
+    service = (ROOT / "examples" / "chaintrace-check.service").read_text()
+    timer = (ROOT / "examples" / "chaintrace-check.timer").read_text()
+    assert "chaintrace check --name geth --brief" in service
+    assert "[Timer]" in timer
+    assert "OnUnitActiveSec=5min" in timer
+
+
 def test_example_trace_is_critical() -> None:
     result = _run("check", "--trace", "examples/compromise.trace", "--no-baseline")
     assert result.returncode == 2

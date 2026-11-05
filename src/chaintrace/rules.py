@@ -103,6 +103,12 @@ def key_findings(node_pid: int, opens: tuple[KeyOpen, ...]) -> list[Finding]:
     return found
 
 
+def worst_severity(findings: list[Finding]) -> str:
+    if not findings:
+        return "ok"
+    return min(findings, key=lambda item: _RANK[item.severity]).severity
+
+
 def exit_code(findings: list[Finding]) -> int:
     if any(item.severity == "critical" for item in findings):
         return 2

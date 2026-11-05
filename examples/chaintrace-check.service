@@ -1,0 +1,8 @@
+# Example only. ChainTrace does not install this unit.
+# Copy it, with the timer, to /etc/systemd/system/ and start the timer yourself.
+[Unit]
+Description=ChainTrace check for geth
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/env chaintrace check --name geth --brief
