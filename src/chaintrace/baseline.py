@@ -22,8 +22,33 @@ class Baseline:
     listen: frozenset[str]
 
 
+_DATA_FLAGS = ("--datadir", "--data-dir", "--data-path", "--dataDir")
+
+
+def datadir(cmdline: tuple[str, ...]) -> str:
+    for index, arg in enumerate(cmdline):
+        for flag in _DATA_FLAGS:
+            if arg == flag and index + 1 < len(cmdline):
+                return cmdline[index + 1]
+            prefix = flag + "="
+            if arg.startswith(prefix) and arg != prefix:
+                return arg[len(prefix) :]
+    return ""
+
+
 def baseline_key(obs: Observation) -> str:
-    return obs.comm if obs.client == "unknown" else obs.client
+    name = obs.comm if obs.client == "unknown" else obs.client
+    data = datadir(obs.cmdline)
+    if data:
+        return f"{name} {data}"
+    return f"{name} {obs.pid}"
+
+
+def _legacy_key(key: str) -> str:
+    name, separator, rest = key.partition(" ")
+    if separator and rest:
+        return name
+    return key
 
 
 def home_file() -> Path:
@@ -49,10 +74,14 @@ def load(path: Path, client: str) -> Baseline | None:
     except json.JSONDecodeError as exc:
         raise BaselineError(f"{path} is not a baseline file") from exc
     item = raw.get(client)
+    chosen = client
+    if not isinstance(item, dict):
+        chosen = _legacy_key(client)
+        item = raw.get(chosen) if chosen != client else None
     if not isinstance(item, dict):
         return None
     return Baseline(
-        client=client,
+        client=chosen,
         exe=str(item.get("exe", "")),
         unknown=frozenset(item.get("unknown", [])),
         listen=frozenset(item.get("listen", [])),

@@ -89,7 +89,7 @@ def test_json_and_report_and_baseline(tmp_path: Path) -> None:
     saved = _run("baseline", "--proc", "examples/geth", "--pid", "4242", home=home)
     assert saved.returncode == 0
     path = home / "baseline.json"
-    assert "geth" in json.loads(path.read_text())
+    assert "geth /var/lib/geth" in json.loads(path.read_text())
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 

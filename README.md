@@ -142,7 +142,7 @@ warning sensitive-file pid 77 python /var/lib/geth/keystore/UTC--example
 | `metadata-destination` | critical | A connection to a cloud metadata address. |
 | `persistence` | critical | An open path under cron, systemd, sudoers, preload, or authorized keys. |
 
-`baseline` stores the executable, the listen addresses, and the unknown destinations in `~/.chaintrace/baseline.json`, or under `CHAINTRACE_HOME`. The file is readable only by its owner. One client name has one baseline. `--no-baseline` ignores it.
+`baseline` stores the executable, the listen addresses, and the unknown destinations in `~/.chaintrace/baseline.json`, or under `CHAINTRACE_HOME`. The file is readable only by its owner. The key is the client and the datadir (`--datadir`, `--data-dir`, `--data-path`, or `--dataDir`). When the command line has no datadir, the key is the client and the pid. Two Geth processes with different datadirs keep separate baselines, so a binary change for one stays with that datadir. An older file that names only the client still loads. `--no-baseline` ignores the file.
 
 ## Kernel probe
 
