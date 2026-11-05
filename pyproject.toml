@@ -1,6 +1,6 @@
 [project]
 name = "chaintrace"
-version = "0.1.0"
+version = "0.2.0"
 description = "See what a blockchain node is doing, from the process table and a short kernel trace."
 readme = "README.md"
 license = "MIT"
