@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChainTrace</title>
+  <meta name="description" content="ChainTrace shows what a blockchain node process is doing: open files, connections, and a short read-only eBPF probe.">
+  <style>
+    :root { color-scheme: light; }
+    body {
+      margin: 0 auto;
+      max-width: 40rem;
+      padding: 3.5rem 1.25rem 4rem;
+      color: #1f2328;
+      background: #fff;
+      font: 1.05rem/1.6 Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+    }
+    h1 {
+      margin: 0 0 0.75rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 2rem;
+      font-weight: 650;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+    }
+    h2 {
+      margin: 2rem 0 0.5rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 1.05rem;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+    }
+    p { margin: 0.75rem 0; }
+    a { color: #0969da; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    pre {
+      margin: 1rem 0;
+      padding: 0.85rem 1rem;
+      overflow: auto;
+      background: #f6f8fa;
+      border: 1px solid #d1d9e0;
+      border-radius: 6px;
+      font-size: 0.92rem;
+      line-height: 1.45;
+    }
+  </style>
+</head>
+<body>
+  <h1>ChainTrace</h1>
+  <p>ChainTrace answers one question: what is a blockchain node doing internally?</p>
+  <p>It reads the process, the files that process has open, and the connections it holds. A short read-only eBPF probe is there when you ask for one. A finding is printed when that behavior does not belong on a node.</p>
+  <p>ValidatorPulse raises an alert. ChainDiff decides whether an upgrade is safe. chainlog-ai explains a failure from the logs. ChainTrace is the view of the process itself.</p>
+  <h2>Install</h2>
+  <pre><code>pip install chaintrace</code></pre>
+  <p>Python 3.11 or newer. The package is on <a href="https://pypi.org/project/chaintrace/">PyPI</a>. Commands, client profiles, and the saved examples are in the <a href="https://github.com/ehsanhajian/chaintrace#install">README</a>.</p>
+  <p><a href="https://github.com/ehsanhajian/chaintrace">github.com/ehsanhajian/chaintrace</a></p>
+</body>
+</html>
